@@ -1,0 +1,45 @@
+# Intermediate files
+Intermediate/
+Binaries/
+Build/
+
+# Visual Studio
+.vs/
+*.VC.db
+*.suo
+*.user
+*.sln.docstates
+
+# Rider
+.idea/
+
+# C++ generated files
+*.gen.cpp
+*.gen.h
+
+# Object files
+*.obj
+*.o
+*.so
+*.dylib
+*.dll
+
+# Metadata
+*.uasset
+*.umap
+*.ini
+
+# Logs
+*.log
+Log/
+
+# Cache
+Saved/
+Cache/
+
+# Temporary files
+Temp/
+*.tmp
+*.bak
+*.swp
+*~
