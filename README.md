@@ -6,6 +6,15 @@
 
 **Плагин предоставляет доступ к API Radio Garden**, позволяя искать радиостанции по геолокации, получать прямые ссылки на потоки и работать с метаданными станций.
 
+## Основано на
+
+Данный плагин основан на неофициальной OpenAPI спецификации Radio Garden API:
+
+- **Репозиторий:** [radio-garden-openapi](https://github.com/jonasrmichel/radio-garden-openapi)
+- **Документация:** [jonasrmichel.github.io/radio-garden-openapi](https://jonasrmichel.github.io/radio-garden-openapi/)
+
+Неофициальная спецификация API предоставляет полную информацию о всех доступных endpoint'ах, форматах запросов/ответов и структуре данных Radio Garden.
+
 ## Возможности
 
 ### Основная функциональность
