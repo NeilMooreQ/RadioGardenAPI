@@ -445,3 +445,46 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FOnRadioGardenGeolocationReceived, FRadioGarde
  * Делегат для асинхронного получения URL потока
  */
 DECLARE_DYNAMIC_DELEGATE_TwoParams(FOnRadioGardenStreamUrlReceived, bool, bSuccess, FString, StreamUrl);
+
+/**
+ * Радио станция с расстоянием
+ */
+USTRUCT(BlueprintType)
+struct FRadioGardenChannelWithDistance
+{
+    GENERATED_BODY()
+
+    /** URL потока станции */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radio Garden")
+    FString Url;
+
+    /** Название станции */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radio Garden")
+    FString Title;
+
+    /** Расстояние от заданной точки (в километрах) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radio Garden")
+    double Distance = 0.0;
+
+    FRadioGardenChannelWithDistance() = default;
+};
+
+/**
+ * Результат получения ближайших каналов
+ */
+USTRUCT(BlueprintType)
+struct FRadioGardenNearbyChannelsResponse : public FRadioGardenApiResponse
+{
+    GENERATED_BODY()
+
+    /** Список ближайших каналов */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Radio Garden")
+    TArray<FRadioGardenChannelWithDistance> Channels;
+
+    FRadioGardenNearbyChannelsResponse() = default;
+};
+
+/**
+ * Делегат для асинхронного получения ближайших каналов
+ */
+DECLARE_DYNAMIC_DELEGATE_OneParam(FOnRadioGardenNearbyChannelsReceived, FRadioGardenNearbyChannelsResponse, Response);

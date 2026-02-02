@@ -67,3 +67,13 @@ FString URadioGardenBlueprintFunctionLibrary::CoordsToString(const FRadioGardenC
 {
     return FString::Printf(TEXT("%.6f,%.6f"), Coords.Latitude, Coords.Longitude);
 }
+
+void URadioGardenBlueprintFunctionLibrary::GetNearbyChannels(double Latitude, double Longitude, int32 ChannelsCount, const FOnRadioGardenNearbyChannelsReceived& OnCompleted)
+{
+    IRadioGardenAPI::GetNearbyChannelsAsync(Latitude, Longitude, ChannelsCount, OnCompleted);
+}
+
+void URadioGardenBlueprintFunctionLibrary::GetNearbyChannelsByGeolocation(int32 ChannelsCount, const FOnRadioGardenNearbyChannelsReceived& OnCompleted)
+{
+    IRadioGardenAPI::GetNearbyChannelsByGeolocationAsync(ChannelsCount, OnCompleted);
+}

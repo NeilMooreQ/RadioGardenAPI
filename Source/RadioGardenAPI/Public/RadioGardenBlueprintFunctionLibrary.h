@@ -111,4 +111,22 @@ public:
      */
     UFUNCTION(BlueprintPure, Category = "Radio Garden API")
     static FString CoordsToString(const FRadioGardenCoords& Coords);
+
+    /**
+     * Получить ближайшие радио станции по координатам (асинхронно)
+     * @param Latitude Широта
+     * @param Longitude Долгота
+     * @param ChannelsCount Количество каналов для получения
+     * @param OnCompleted Делегат завершения
+     */
+    UFUNCTION(BlueprintCallable, Category = "Radio Garden API")
+    static void GetNearbyChannels(double Latitude, double Longitude, int32 ChannelsCount, const FOnRadioGardenNearbyChannelsReceived& OnCompleted);
+
+    /**
+     * Получить ближайшие радио станции по геолокации (асинхронно)
+     * @param ChannelsCount Количество каналов для получения
+     * @param OnCompleted Делегат завершения
+     */
+    UFUNCTION(BlueprintCallable, Category = "Radio Garden API")
+    static void GetNearbyChannelsByGeolocation(int32 ChannelsCount, const FOnRadioGardenNearbyChannelsReceived& OnCompleted);
 };

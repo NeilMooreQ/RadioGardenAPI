@@ -129,6 +129,24 @@ public:
      */
     static void GetGeolocationAsync(const FOnRadioGardenGeolocationReceived& OnCompleted);
 
+    // ========== Nearby Channels ==========
+
+    /**
+     * Получить ближайшие радио станции по координатам (асинхронно)
+     * @param Latitude Широта
+     * @param Longitude Долгота
+     * @param ChannelsCount Количество каналов для получения
+     * @param OnCompleted Делегат завершения
+     */
+    static void GetNearbyChannelsAsync(double Latitude, double Longitude, int32 ChannelsCount, const FOnRadioGardenNearbyChannelsReceived& OnCompleted);
+
+    /**
+     * Получить ближайшие радио станции по геолокации (асинхронно)
+     * @param ChannelsCount Количество каналов для получения
+     * @param OnCompleted Делегат завершения
+     */
+    static void GetNearbyChannelsByGeolocationAsync(int32 ChannelsCount, const FOnRadioGardenNearbyChannelsReceived& OnCompleted);
+
     // ========== Utility ==========
 
     /**

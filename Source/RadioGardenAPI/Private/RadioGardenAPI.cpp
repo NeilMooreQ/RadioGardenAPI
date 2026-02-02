@@ -225,17 +225,23 @@ void IRadioGardenAPI::GetPlaceChannels(const FString& PlaceId, FRadioGardenChann
         }
 
         FRadioGardenChannel Channel;
-        Channel.Title = FRadioGardenHttpRequest::GetStringSafe(ChannelObj, TEXT("title"));
 
-        // Получаем href и извлекаем из него channel ID
-        FString Href = FRadioGardenHttpRequest::GetStringSafe(ChannelObj, TEXT("href"));
-        Channel.Url = Href;
+        // Структура: { page: { url: "/listen/station-name/ChannelId", title: "...", ... } }
+        TSharedPtr<FJsonObject> PageObj;
+        if (!FRadioGardenHttpRequest::GetObjectSafe(ChannelObj, TEXT("page"), PageObj))
+        {
+            continue;
+        }
+
+        Channel.Title = FRadioGardenHttpRequest::GetStringSafe(PageObj, TEXT("title"));
+        FString PageUrl = FRadioGardenHttpRequest::GetStringSafe(PageObj, TEXT("url"));
+        Channel.Url = PageUrl;
 
         // Парсим ID из URL (формат: /listen/station-name/ChannelId)
-        if (!Href.IsEmpty())
+        if (!PageUrl.IsEmpty())
         {
             TArray<FString> Parts;
-            Href.ParseIntoArray(Parts, TEXT("/"), true);
+            PageUrl.ParseIntoArray(Parts, TEXT("/"), true);
             if (Parts.Num() >= 2)
             {
                 Channel.Id = Parts[Parts.Num() - 1];
@@ -529,6 +535,188 @@ void IRadioGardenAPI::GetGeolocationAsync(const FOnRadioGardenGeolocationReceive
         {
             OnCompleted.ExecuteIfBound(Response);
         });
+    });
+}
+
+// ========== Nearby Channels ==========
+
+namespace
+{
+    // Вспомогательная структура для хранения места с расстоянием
+    struct FPlaceWithDistance
+    {
+        FRadioGardenPlace Place;
+        double Distance;
+
+        FPlaceWithDistance() : Distance(0.0) {}
+        FPlaceWithDistance(const FRadioGardenPlace& InPlace, double InDistance)
+            : Place(InPlace), Distance(InDistance) {}
+
+        bool operator<(const FPlaceWithDistance& Other) const
+        {
+            return Distance < Other.Distance;
+        }
+    };
+
+    // Вычисление расстояния по формуле Хаверсина (в километрах)
+    double CalculateDistance(double Lat1, double Lon1, double Lat2, double Lon2)
+    {
+        const double R = 6371.0; // Радиус Земли в км
+        const double DLat = FMath::DegreesToRadians(Lat2 - Lat1);
+        const double DLon = FMath::DegreesToRadians(Lon2 - Lon1);
+
+        const double A = FMath::Sin(DLat / 2) * FMath::Sin(DLat / 2) +
+                         FMath::Cos(FMath::DegreesToRadians(Lat1)) * FMath::Cos(FMath::DegreesToRadians(Lat2)) *
+                         FMath::Sin(DLon / 2) * FMath::Sin(DLon / 2);
+
+        const double C = 2 * FMath::Atan2(FMath::Sqrt(A), FMath::Sqrt(1 - A));
+        return R * C;
+    }
+}
+
+void IRadioGardenAPI::GetNearbyChannelsAsync(double Latitude, double Longitude, int32 ChannelsCount, const FOnRadioGardenNearbyChannelsReceived& OnCompleted)
+{
+    AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [Latitude, Longitude, ChannelsCount, OnCompleted]()
+    {
+        FRadioGardenNearbyChannelsResponse Response;
+        Response.Status = ERadioGardenStatus::UnknownError;
+        Response.bSuccessful = false;
+
+        if (ChannelsCount <= 0)
+        {
+            Response.Status = ERadioGardenStatus::InvalidResponse;
+            Response.ErrorMessage = TEXT("Channels count must be positive");
+            AsyncTask(ENamedThreads::GameThread, [Response, OnCompleted]()
+            {
+                OnCompleted.ExecuteIfBound(Response);
+            });
+            return;
+        }
+
+        // Шаг 1: Получаем все места
+        FRadioGardenPlacesResponse PlacesResponse;
+        GetPlaces(PlacesResponse);
+
+        if (!PlacesResponse.bSuccessful)
+        {
+            Response.Status = PlacesResponse.Status;
+            Response.ErrorMessage = PlacesResponse.ErrorMessage;
+            AsyncTask(ENamedThreads::GameThread, [Response, OnCompleted]()
+            {
+                OnCompleted.ExecuteIfBound(Response);
+            });
+            return;
+        }
+
+        // Шаг 2: Вычисляем расстояние до каждого места и сортируем
+        TArray<FPlaceWithDistance> PlacesWithDistance;
+        for (const FRadioGardenPlace& Place : PlacesResponse.Places)
+        {
+            const double Distance = CalculateDistance(Latitude, Longitude, Place.Geo.Latitude, Place.Geo.Longitude);
+            PlacesWithDistance.Add(FPlaceWithDistance(Place, Distance));
+        }
+
+        PlacesWithDistance.Sort();
+
+        // Шаг 3: Собираем каналы, начиная с ближайших мест
+        TArray<FRadioGardenChannelWithDistance> AllChannels;
+        int32 ChannelsNeeded = ChannelsCount;
+
+        for (const FPlaceWithDistance& PlaceWithDist : PlacesWithDistance)
+        {
+            if (ChannelsNeeded <= 0)
+            {
+                break;
+            }
+
+            FRadioGardenChannelsResponse ChannelsResponse;
+            GetPlaceChannels(PlaceWithDist.Place.Id, ChannelsResponse);
+
+            if (ChannelsResponse.bSuccessful)
+            {
+                const FString BaseUrl = GetBaseUrl();
+                for (const FRadioGardenChannel& Channel : ChannelsResponse.Channels)
+                {
+                    FRadioGardenChannelWithDistance ChannelWithDist;
+                    ChannelWithDist.Title = Channel.Title;
+                    ChannelWithDist.Distance = PlaceWithDist.Distance;
+
+                    // Формируем URL потока: https://radio.garden/api/ara/content/listen/ChannelId/channel.mp3
+                    if (!Channel.Id.IsEmpty())
+                    {
+                        ChannelWithDist.Url = FString::Printf(TEXT("%s/ara/content/listen/%s/channel.mp3"), *BaseUrl, *Channel.Id);
+                    }
+
+                    AllChannels.Add(ChannelWithDist);
+                }
+
+                ChannelsNeeded -= ChannelsResponse.Channels.Num();
+            }
+        }
+
+        if (AllChannels.Num() == 0)
+        {
+            Response.Status = ERadioGardenStatus::InvalidResponse;
+            Response.ErrorMessage = TEXT("No channels found");
+            AsyncTask(ENamedThreads::GameThread, [Response, OnCompleted]()
+            {
+                OnCompleted.ExecuteIfBound(Response);
+            });
+            return;
+        }
+
+        // Шаг 4: Сортируем каналы по расстоянию и ограничиваем количество
+        AllChannels.Sort([](const FRadioGardenChannelWithDistance& A, const FRadioGardenChannelWithDistance& B)
+        {
+            return A.Distance < B.Distance;
+        });
+
+        // Берем только нужное количество
+        if (AllChannels.Num() > ChannelsCount)
+        {
+            AllChannels.SetNum(ChannelsCount);
+        }
+
+        Response.Channels = AllChannels;
+        Response.Status = ERadioGardenStatus::Success;
+        Response.bSuccessful = true;
+
+        AsyncTask(ENamedThreads::GameThread, [Response, OnCompleted]()
+        {
+            OnCompleted.ExecuteIfBound(Response);
+        });
+    });
+}
+
+void IRadioGardenAPI::GetNearbyChannelsByGeolocationAsync(int32 ChannelsCount, const FOnRadioGardenNearbyChannelsReceived& OnCompleted)
+{
+    // Сначала получаем геолокацию, затем вызываем GetNearbyChannelsAsync
+    AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [ChannelsCount, OnCompleted]()
+    {
+        FRadioGardenGeolocationResponse GeoResponse;
+        GetGeolocation(GeoResponse);
+
+        if (!GeoResponse.bSuccessful)
+        {
+            FRadioGardenNearbyChannelsResponse Response;
+            Response.Status = GeoResponse.Status;
+            Response.ErrorMessage = GeoResponse.ErrorMessage;
+            Response.bSuccessful = false;
+
+            AsyncTask(ENamedThreads::GameThread, [Response, OnCompleted]()
+            {
+                OnCompleted.ExecuteIfBound(Response);
+            });
+            return;
+        }
+
+        // Используем координаты из геолокации
+        const double Latitude = GeoResponse.Geolocation.Latitude;
+        const double Longitude = GeoResponse.Geolocation.Longitude;
+
+        // Вызываем GetNearbyChannelsAsync с полученными координатами
+        // Внимание: этот вызов создаст еще один AsyncTask, что нормально
+        GetNearbyChannelsAsync(Latitude, Longitude, ChannelsCount, OnCompleted);
     });
 }
 
